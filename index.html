@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaharaAI — National Disaster Grid & Emergency Command</title>
+  <meta name="description" content="National Disaster Grid & Emergency Command system connecting citizens, NDRF responders, hospitals, volunteers, and early warning systems.">
+  <meta property="og:title" content="SaharaAI — National Disaster Grid & Emergency Command">
+  <meta property="og:description" content="National Disaster Grid & Emergency Command system connecting citizens, NDRF responders, hospitals, volunteers, and early warning systems.">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet.js for Interactive Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js for Live River Gauge & Surge Predictions -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#EF4444',
+              redDark: '#DC2626',
+              amber: '#F59E0B',
+              amberDark: '#D97706',
+              teal: '#14B8A6',
+              tealDark: '#0D9488',
+              blue: '#3B82F6',
+              blueDark: '#2563EB',
+              cyan: '#22D3EE',
+              success: '#22C55E',
+              surface: '#17243A',
+              navy: '#0B1220'
+            },
+            darkBg: '#0B1220',
+            darkCard: '#17243A',
+            darkBorder: '#223555',
+            lightBg: '#F0F4F8',
+            lightCard: '#FFFFFF',
+            lightBorder: '#D1D5DB',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease; }
+    #tactical-map, #hospital-mini-map, #response-map { width: 100%; height: 100%; min-height: 450px; z-index: 10; border-radius: 0.75rem; }
+    .dark .leaflet-tile { filter: brightness(0.85) invert(1) contrast(1.2) hue-rotate(200deg) saturate(0.3); }
+    @keyframes subtlePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.02); } }
+    .live-pulse { animation: subtlePulse 2s infinite ease-in-out; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.4); border-radius: 9999px; }
+    
+    .sos-panel { background: #17243A; border: 1px solid #223555; border-radius: 1rem; padding: 1.5rem; }
+    .badge-critical { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-success { background: rgba(34, 197, 94, 0.15); color: #22C55E; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .badge-gemini { background: rgba(34, 211, 238, 0.15); color: #22D3EE; border: 1px solid rgba(34, 211, 238, 0.3); }
+    .suggestion-chip { background: #0B1220; border: 1px solid #223555; color: #94A3B8; font-size: 11px; padding: 5px 10px; border-radius: 9999px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+    .suggestion-chip:hover { border-color: #22D3EE; color: #22D3EE; }
+    .suggestion-chip.active { background: rgba(34, 211, 238, 0.15); border-color: #22D3EE; color: #22D3EE; font-weight: 700; }
+  </style>
+</head>
+
+<body class="bg-lightBg dark:bg-darkBg text-slate-800 dark:text-gray-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand-red selection:text-white">
+
+  <!-- TOP NOTIFICATION BANNER -->
+  <div class="bg-gradient-to-r from-red-600 via-brand-red to-orange-600 text-white text-xs py-1.5 px-4 font-semibold flex items-center justify-between shadow-sm z-50">
+    <div class="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-white animate-ping"></span>
+        <span class="tracking-wide uppercase font-bold">National Disaster Grid • Rajkot Emergency Command Active</span>
+        <span class="hidden md:inline text-red-100 font-normal">| Prototype integrations • hospital capacity simulation active</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="hidden sm:inline bg-black/25 px-2 py-0.5 rounded text-[11px] font-mono">LAT: 22.3039 | LON: 70.8022</span>
+        <button onclick="showOfflineSimModal()" class="bg-white/20 hover:bg-white/30 text-white text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1 transition">
+          <i data-lucide="radio" class="w-3 h-3 text-emerald-300"></i>
+          <span id="backend-status-label">Frontend demo: ready</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN NAVIGATION BAR WITH DROPDOWN -->
+  <header class="sticky top-0 z-40 bg-white/95 dark:bg-darkCard/95 backdrop-blur-md border-b border-lightBorder dark:border-darkBorder shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo & Identity -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('landing')">
+        <div class="w-9 h-9 rounded-lg bg-brand-red flex items-center justify-center text-white shadow-md shadow-brand-red/30 font-black text-xl">
+          S
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">Sahara<span class="text-brand-red">AI</span></span>
+            <span class="bg-amber-500/10 text-amber-600 dark:text-brand-amber border border-amber-500/20 text-[10px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider">Prototype</span>
+          </div>
+          <p class="text-[10px] text-slate-500 dark:text-gray-400 font-medium">AI Emergency Platform</p>
+        </div>
+      </div>
+
+      <!-- Top Bar Module Selector Dropdown -->
+      <div class="flex items-center gap-3">
+        <div class="relative">
+          <select id="nav-dropdown" onchange="switchTab(this.value)" aria-label="Command Module" class="h-10 rounded-xl border border-lightBorder dark:border-darkBorder bg-slate-100 dark:bg-gray-800 text-slate-800 dark:text-gray-100 px-3 text-xs font-extrabold outline-none cursor-pointer shadow-sm hover:border-brand-red transition">
+            <option value="landing">🛡️ Command Center</option>
+            <option value="citizen">🚨 Citizen SOS Intake</option>
+            <option value="responder">🗺️ Tactical Map CAD</option>
+            <option value="hospital">🏥 Hospital Surge Grid</option>
+            <option value="volunteer">🤝 Volunteer & Civil Defense Hub</option>
+            <option value="earlywarning">⚡ Early Warning Network</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Right Controls: Hotline, Language & Theme Toggle -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Emergency Hotline Button -->
+        <a href="tel:112" class="inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/40 text-brand-red border border-brand-red/30 px-3 py-2 rounded-xl text-xs font-bold hover:bg-red-600 hover:text-white transition">
+          <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+          <span>112</span>
+        </a>
+
+        <!-- Multilingual UI -->
+        <div class="relative">
+          <select id="language-select" onchange="setLanguage(this.value)" aria-label="Language" class="h-10 rounded-xl border border-lightBorder dark:border-darkBorder bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-200 px-2 text-xs font-semibold outline-none cursor-pointer">
+            <option value="en">EN</option>
+            <option value="hi">हिंदी</option>
+            <option value="gu">ગુજરાતી</option>
+          </select>
+        </div>
+
+        <!-- Light/Dark Mode Switcher -->
+        <button id="theme-toggle-btn" onclick="toggleTheme()" class="flex items-center gap-1.5 p-2.5 rounded-xl border border-lightBorder dark:border-darkBorder bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-200 hover:bg-slate-200 dark:hover:bg-gray-700 text-xs font-medium cursor-pointer" title="Switch Theme">
+          <span id="theme-icon"><i data-lucide="sun" class="w-4 h-4 text-amber-500"></i></span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- ======================================================== -->
+    <!-- 1. LANDING & COMMAND CENTER VIEW -->
+    <!-- ======================================================== -->
+    <section id="view-landing" class="tab-view block space-y-8">
+      
+      <!-- Spacious Central Landing Card with Primary SOS Action -->
+      <div class="max-w-4xl mx-auto bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder rounded-3xl p-8 sm:p-12 shadow-sm text-center space-y-6">
+        
+        <div class="flex flex-wrap items-center justify-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-red-500/10 text-brand-red border border-red-500/20">
+            <span class="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span>
+            NATIONAL DISASTER GRID • RAJKOT COMMAND
+          </span>
+          <span class="inline-flex items-center gap-1 px-3.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-300 border border-slate-200 dark:border-gray-700">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-brand-teal"></i>
+            NDMA & Govt. Protocol Ready
+          </span>
+        </div>
+
+        <div class="space-y-3">
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 dark:text-white">
+            Sahara<span class="text-brand-red">AI</span>
+          </h1>
+          <p class="text-lg sm:text-xl font-bold text-slate-700 dark:text-gray-200">
+            "जब आप सबसे अकेले हों — SaharaAI साथ है"
+          </p>
+          <p class="text-sm text-slate-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            AI-powered multi-modal emergency coordination platform connecting citizens, NDRF responders, hospitals, and civil defense in real-time.
+          </p>
+        </div>
+
+        <!-- PRIMARY REPORT AN EMERGENCY SOS ACTION -->
+        <div class="py-4">
+          <button onclick="switchTab('citizen')" class="inline-flex flex-col items-center justify-center bg-gradient-to-r from-red-600 via-brand-red to-rose-600 hover:from-red-700 hover:to-rose-700 text-white px-8 py-5 rounded-2xl shadow-xl shadow-red-500/30 transition transform active:scale-95 group cursor-pointer">
+            <div class="flex items-center gap-3 text-xl font-black tracking-wide">
+              <span class="text-2xl animate-bounce">🚨</span>
+              <span>REPORT AN EMERGENCY</span>
+            </div>
+            <span class="text-xs text-red-100 font-medium mt-1">Start an AI-assisted emergency report</span>
+          </button>
+          <p class="text-[11px] text-slate-400 dark:text-gray-500 mt-3">
+            Powered by Google Gemini multimodal analysis for voice, image, and text triage.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- ROLE SELECTION LAUNCHPAD TILES -->
+      <div class="max-w-4xl mx-auto">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">Select Operational Role</h2>
+            <p class="text-xs text-slate-500 dark:text-gray-400">Direct access to specialized incident management interfaces</p>
+          </div>
+          <span class="text-xs font-semibold text-slate-400">4 Core Modules</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <div onclick="switchTab('citizen')" class="group relative bg-white dark:bg-darkCard border-2 border-red-500/30 dark:border-red-500/20 rounded-2xl p-5 hover:border-brand-red shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-between overflow-hidden">
+            <div class="absolute top-0 left-0 w-2 h-full bg-brand-red"></div>
+            <div class="pl-2">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-10 h-10 rounded-xl bg-red-500/10 text-brand-red flex items-center justify-center font-bold">
+                    <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                  </div>
+                  <div>
+                    <h3 class="font-black text-base text-slate-900 dark:text-white group-hover:text-brand-red transition">I Need Emergency Help</h3>
+                    <span class="text-[11px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">Citizen Voice, Photo & SOS</span>
+                  </div>
+                </div>
+                <span class="bg-red-500/10 text-brand-red text-xs font-bold px-2 py-0.5 rounded-full">PRIORITY #1</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed mb-4">
+                Emergency reporting interface for text, voice and image evidence. Gemini analyzes the submitted evidence and returns structured incident data.
+              </p>
+            </div>
+            <div class="pl-2 pt-3 border-t border-slate-100 dark:border-gray-800 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-500">Voice • Camera • 1-Tap SOS</span>
+              <span class="text-xs font-bold text-brand-red flex items-center gap-1 group-hover:translate-x-1 transition">
+                Launch SOS Intake <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </span>
+            </div>
+          </div>
+
+          <div onclick="switchTab('responder')" class="group relative bg-white dark:bg-darkCard border-2 border-blue-500/30 dark:border-blue-500/20 rounded-2xl p-5 hover:border-brand-blue shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-between overflow-hidden">
+            <div class="absolute top-0 left-0 w-2 h-full bg-brand-blue"></div>
+            <div class="pl-2">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-brand-blue flex items-center justify-center font-bold">
+                    <i data-lucide="navigation" class="w-5 h-5"></i>
+                  </div>
+                  <div>
+                    <h3 class="font-black text-base text-slate-900 dark:text-white group-hover:text-brand-blue transition">Responder CAD & Dispatch</h3>
+                    <span class="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">NDRF • Police • Fire • 108</span>
+                  </div>
+                </div>
+                <span class="bg-blue-500/10 text-brand-blue text-xs font-bold px-2 py-0.5 rounded-full">LIVE MAP</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed mb-4">
+                Real-time CAD map with incident markers, 500m danger hazard radius, blocked road corridor alerts, and AI alternative routing bypass straight to Gokul Hospital.
+              </p>
+            </div>
+            <div class="pl-2 pt-3 border-t border-slate-100 dark:border-gray-800 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-500">Live GPS Routing • Hazard Avoidance</span>
+              <span class="text-xs font-bold text-brand-blue flex items-center gap-1 group-hover:translate-x-1 transition">
+                Open Tactical CAD <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </span>
+            </div>
+          </div>
+
+          <div onclick="switchTab('hospital')" class="group relative bg-white dark:bg-darkCard border-2 border-emerald-500/30 dark:border-emerald-500/20 rounded-2xl p-5 hover:border-brand-teal shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-between overflow-hidden">
+            <div class="absolute top-0 left-0 w-2 h-full bg-brand-teal"></div>
+            <div class="pl-2">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-brand-teal flex items-center justify-center font-bold">
+                    <i data-lucide="building-2" class="w-5 h-5"></i>
+                  </div>
+                  <div>
+                    <h3 class="font-black text-base text-slate-900 dark:text-white group-hover:text-brand-teal transition">Hospital Command & Surge</h3>
+                    <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Gokul Hospital Sector 3</span>
+                  </div>
+                </div>
+                <span class="bg-emerald-500/10 text-brand-teal text-xs font-bold px-2 py-0.5 rounded-full">CASUALTY PREP</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed mb-4">
+                Prototype hospital coordination view. Real hospital telemetry is not connected; actions are recorded as workflow events.
+              </p>
+            </div>
+            <div class="pl-2 pt-3 border-t border-slate-100 dark:border-gray-800 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-500">Bed Allocation • Surge Forecasting</span>
+              <span class="text-xs font-bold text-brand-teal flex items-center gap-1 group-hover:translate-x-1 transition">
+                View Hospital Grid <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </span>
+            </div>
+          </div>
+
+          <div onclick="switchTab('volunteer')" class="group relative bg-white dark:bg-darkCard border-2 border-amber-500/30 dark:border-amber-500/20 rounded-2xl p-5 hover:border-brand-amber shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-between overflow-hidden">
+            <div class="absolute top-0 left-0 w-2 h-full bg-brand-amber"></div>
+            <div class="pl-2">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-brand-amber flex items-center justify-center font-bold">
+                    <i data-lucide="award" class="w-5 h-5"></i>
+                  </div>
+                  <div>
+                    <h3 class="font-black text-base text-slate-900 dark:text-white group-hover:text-brand-amber transition">Civil Defense & Volunteers</h3>
+                    <span class="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">NGOs • Red Cross • Volunteers</span>
+                  </div>
+                </div>
+                <span class="bg-amber-500/10 text-brand-amber text-xs font-bold px-2 py-0.5 rounded-full">COOPERATION</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed mb-4">
+                Connecting spontaneous volunteers with vetted tasks. AI skill-matching for medical first aid, rescue boat operations, and food distribution with gamified community rewards.
+              </p>
+            </div>
+            <div class="pl-2 pt-3 border-t border-slate-100 dark:border-gray-800 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-500">Skill Matching • Verified Badges</span>
+              <span class="text-xs font-bold text-brand-amber flex items-center gap-1 group-hover:translate-x-1 transition">
+                Enter Volunteer Hub <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- 2. CITIZEN SOS REDESIGNED WORKFLOW (SCREEN A & SCREEN B) -->
+    <!-- ======================================================== -->
+    <section id="view-citizen" class="tab-view hidden space-y-6">
+      
+      <!-- SCREEN A: SOS INTAKE -->
+      <div id="sos-screen-a" class="space-y-6">
+        
+        <div class="bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl p-5 text-white flex items-center justify-between shadow-md">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-black text-lg">🆘</div>
+            <div>
+              <h2 class="font-black text-lg tracking-tight">SOS Intake • Step 1: Situation Report</h2>
+              <p class="text-xs text-red-100">Describe what is happening. Gemini will analyze and assess the situation before dispatch.</p>
+            </div>
+          </div>
+          <button onclick="resetSosIntake()" class="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg font-bold transition">Reset</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- Left Intake Form -->
+          <div class="lg:col-span-7 sos-panel space-y-6">
+            
+            <div>
+              <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2.5">
+                1. Select Emergency Type <span class="text-brand-red">*</span>
+              </label>
+              <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <button onclick="selectEmergencyType(this, 'Road Crash')" class="em-type-btn p-2.5 rounded-xl border-2 border-brand-red bg-red-500/10 text-brand-red text-center font-bold text-xs flex flex-col items-center gap-1 transition">
+                  <span class="text-xl">🚗</span>
+                  <span class="truncate w-full text-[11px]">Road Crash</span>
+                </button>
+                <button onclick="selectEmergencyType(this, 'Flood')" class="em-type-btn p-2.5 rounded-xl border border-darkBorder bg-slate-800 text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-brand-blue transition">
+                  <span class="text-xl">🌊</span>
+                  <span class="truncate w-full text-[11px]">Flood</span>
+                </button>
+                <button onclick="selectEmergencyType(this, 'Fire')" class="em-type-btn p-2.5 rounded-xl border border-darkBorder bg-slate-800 text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-orange-500 transition">
+                  <span class="text-xl">🔥</span>
+                  <span class="truncate w-full text-[11px]">Fire</span>
+                </button>
+                <button onclick="selectEmergencyType(this, 'Collapse')" class="em-type-btn p-2.5 rounded-xl border border-darkBorder bg-slate-800 text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-amber-500 transition">
+                  <span class="text-xl">🏚️</span>
+                  <span class="truncate w-full text-[11px]">Collapse</span>
+                </button>
+                <button onclick="selectEmergencyType(this, 'Medical')" class="em-type-btn p-2.5 rounded-xl border border-darkBorder bg-slate-800 text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-emerald-500 transition">
+                  <span class="text-xl">🏥</span>
+                  <span class="truncate w-full text-[11px]">Medical</span>
+                </button>
+                <button onclick="selectEmergencyType(this, 'Other')" class="em-type-btn p-2.5 rounded-xl border border-darkBorder bg-slate-800 text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-purple-500 transition">
+                  <span class="text-xl">⚡</span>
+                  <span class="truncate w-full text-[11px]">Other</span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
+                DESCRIBE WHAT IS HAPPENING
+              </label>
+              <textarea id="incident-message" rows="4" maxlength="8000"
+                class="w-full rounded-xl border border-darkBorder bg-slate-900/80 p-3.5 text-sm text-gray-100 outline-none focus:ring-2 focus:ring-brand-cyan/40"
+                placeholder="Example: Two vehicles collided near an intersection. One person appears injured...">
+              </textarea>
+              <p class="mt-1 text-[11px] text-slate-400">Use your own language. Include only information you know or directly observed.</p>
+            </div>
+
+            <div>
+              <span class="block text-[10px] font-extrabold uppercase tracking-wider text-cyan-400 mb-2">SUGGESTED DETAILS (CLICK TO ADD)</span>
+              <div id="suggestion-chips-container" class="flex flex-wrap gap-1.5"></div>
+            </div>
+
+            <input id="scene-file-input" type="file" accept="image/*" class="hidden" onchange="handleSceneFile(event)">
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button id="voice-record-btn" onclick="toggleVoiceRecording()" class="p-3.5 rounded-xl border-2 border-dashed border-red-500/40 bg-red-500/5 hover:bg-red-500/10 flex flex-col items-center justify-center gap-2 text-center transition">
+                <div id="voice-mic-icon" class="w-8 h-8 rounded-full bg-brand-red text-white flex items-center justify-center">
+                  <i data-lucide="mic" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <div id="voice-status-text" class="text-xs font-bold text-white">Record Voice SOS</div>
+                  <div class="text-[10px] text-slate-400">Speak in mother tongue</div>
+                </div>
+              </button>
+
+              <button type="button" onclick="document.getElementById('scene-file-input').click()" class="p-3.5 rounded-xl border border-darkBorder bg-slate-800/60 hover:border-brand-blue flex flex-col items-center justify-center gap-2 text-center transition">
+                <div class="w-8 h-8 rounded-full bg-blue-500/10 text-brand-blue flex items-center justify-center">
+                  <i data-lucide="camera" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-white">Attach Scene Photo</div>
+                  <div id="photo-attached-status" class="text-[10px] text-slate-400">Gemini Vision AI</div>
+                </div>
+              </button>
+
+              <div class="p-3.5 rounded-xl border border-darkBorder bg-slate-800/60 flex flex-col items-center justify-center gap-2 text-center">
+                <div class="w-8 h-8 rounded-full bg-emerald-500/10 text-brand-success flex items-center justify-center">
+                  <i data-lucide="crosshair" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-white">GPS Location</div>
+                  <div id="gps-status" class="text-[10px] text-brand-success font-mono">Acquiring…</div>
+                </div>
+              </div>
+            </div>
+
+            <button id="analyze-report-btn" onclick="analyzeSosReport()" class="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl font-black text-sm shadow-lg flex items-center justify-center gap-2 transition cursor-pointer">
+              <i data-lucide="cpu" class="w-5 h-5 text-cyan-200 animate-pulse"></i>
+              <span>ANALYZE REPORT WITH GEMINI</span>
+            </button>
+
+          </div>
+
+          <!-- Right Column: AI Situation Assessment -->
+          <div class="lg:col-span-5 space-y-4">
+            
+            <div id="assessment-container" class="sos-panel space-y-4 hidden">
+              <div class="flex items-center justify-between pb-3 border-b border-darkBorder">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-brand-cyan animate-ping"></div>
+                  <h3 class="font-extrabold text-sm text-white uppercase tracking-wider">AI SITUATION ASSESSMENT</h3>
+                </div>
+                <span id="assessment-severity-badge" class="badge-critical text-[10px] font-bold px-2.5 py-0.5 rounded-full">HIGH SEVERITY</span>
+              </div>
+
+              <div class="space-y-2 text-xs">
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-darkBorder">
+                  <span class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Situation Summary</span>
+                  <p id="assessment-summary" class="text-sm font-bold text-white mt-1">Analyzing...</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="bg-slate-900/80 p-2.5 rounded-xl border border-darkBorder">
+                    <span class="text-[10px] text-slate-400 uppercase font-bold">People at Risk</span>
+                    <div id="assessment-people" class="font-bold text-white text-xs mt-0.5">Unknown</div>
+                  </div>
+                  <div class="bg-slate-900/80 p-2.5 rounded-xl border border-darkBorder">
+                    <span class="text-[10px] text-slate-400 uppercase font-bold">Situation Trend</span>
+                    <div id="assessment-trend" class="font-bold text-amber-400 text-xs mt-0.5">Potentially Worsening</div>
+                  </div>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-darkBorder">
+                  <div>
+                    <span class="text-[10px] font-bold text-brand-success uppercase">✓ Confirmed / Observed Facts</span>
+                    <ul id="list-observed" class="list-disc list-inside text-gray-300 text-[11px] mt-1 space-y-0.5"></ul>
+                  </div>
+                  <div>
+                    <span class="text-[10px] font-bold text-amber-400 uppercase">⚠ Possible Hazards</span>
+                    <ul id="list-hazards" class="list-disc list-inside text-gray-300 text-[11px] mt-1 space-y-0.5"></ul>
+                  </div>
+                  <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">? Unknown Information</span>
+                    <ul id="list-unknown" class="list-disc list-inside text-gray-300 text-[11px] mt-1 space-y-0.5"></ul>
+                  </div>
+                </div>
+
+                <div id="followup-box" class="hidden p-3 bg-cyan-950/30 border border-cyan-800/40 rounded-xl space-y-2">
+                  <span class="text-[11px] font-bold text-brand-cyan">Gemini Follow-up Question:</span>
+                  <p id="followup-question-text" class="text-xs text-gray-200"></p>
+                  <div class="flex gap-2">
+                    <input type="text" id="followup-answer-input" placeholder="Type answer..." class="flex-1 bg-slate-900 border border-darkBorder rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
+                    <button onclick="submitFollowUpAnswer()" class="bg-cyan-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs">Answer</button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-darkBorder text-[11px]">
+                  <div class="bg-emerald-950/20 border border-emerald-900/40 p-2.5 rounded-xl space-y-1">
+                    <span class="font-bold text-emerald-400 uppercase text-[10px]">DO:</span>
+                    <ul id="list-dos" class="space-y-1 text-gray-300"></ul>
+                  </div>
+                  <div class="bg-red-950/20 border border-red-900/40 p-2.5 rounded-xl space-y-1">
+                    <span class="font-bold text-red-400 uppercase text-[10px]">DON'T:</span>
+                    <ul id="list-donts" class="space-y-1 text-gray-300"></ul>
+                  </div>
+                </div>
+
+              </div>
+
+              <div class="pt-3 border-t border-darkBorder">
+                <button onclick="confirmAndStartResponse()" class="w-full py-3.5 bg-gradient-to-r from-red-600 via-brand-red to-rose-600 hover:from-red-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 cursor-pointer transition">
+                  <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                  <span>🚨 CONFIRM EMERGENCY & START RESPONSE</span>
+                </button>
+              </div>
+
+            </div>
+
+            <div id="assessment-placeholder" class="sos-panel text-center py-12 space-y-3">
+              <div class="w-12 h-12 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center mx-auto text-xl font-bold">AI</div>
+              <h3 class="font-bold text-sm text-white">Awaiting Situation Report</h3>
+              <p class="text-xs text-slate-400 max-w-xs mx-auto">Select emergency type, describe what is happening, and click Analyze Report to let Gemini assess the situation.</p>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- SCREEN B: EMERGENCY RESPONSE WORKSPACE -->
+      <div id="sos-screen-b" class="space-y-6 hidden">
+        
+        <div class="bg-slate-900 border border-darkBorder rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+          <div class="flex items-center gap-3">
+            <button onclick="backToIntake()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-gray-200 text-xs font-bold flex items-center gap-1 transition">
+              <i data-lucide="arrow-left" class="w-4 h-4"><span>Back</span></i>
+            </button>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 id="response-incident-title" class="font-black text-base text-white tracking-tight">🚨 EMERGENCY RESPONSE • INCIDENT #SAH-2026-0001</h2>
+                <span class="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">● ACTIVE</span>
+              </div>
+              <p class="text-xs text-slate-400">Live operational workspace • Hospital capacity allocation & response mapping</p>
+            </div>
+          </div>
+          <div class="text-xs font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-3 py-1.5 rounded-xl">
+            PROTOTYPE RESPONSE SIMULATION
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- Left 7 cols -->
+          <div class="lg:col-span-7 space-y-6">
+            
+            <!-- Incident Summary Card -->
+            <div class="sos-panel space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-darkBorder">
+                <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                  <i data-lucide="file-text" class="w-4 h-4 text-brand-cyan"></i> Incident Summary
+                </h3>
+                <span id="response-severity-badge" class="badge-critical text-[10px] font-bold px-2 py-0.5 rounded">HIGH</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span class="text-slate-400 text-[10px] uppercase font-bold">Emergency Type</span>
+                  <div id="response-type" class="font-bold text-white text-sm mt-0.5">—</div>
+                </div>
+                <div>
+                  <span class="text-slate-400 text-[10px] uppercase font-bold">Location</span>
+                  <div id="response-location" class="font-bold text-white text-sm mt-0.5 font-mono">Rajkot Sector 3</div>
+                </div>
+                <div class="col-span-2">
+                  <span class="text-slate-400 text-[10px] uppercase font-bold">Situation Summary</span>
+                  <p id="response-summary" class="text-gray-200 text-xs mt-0.5 leading-relaxed">—</p>
+                </div>
+                <div>
+                  <span class="text-slate-400 text-[10px] uppercase font-bold">People at Risk / Casualties</span>
+                  <div id="response-people" class="font-bold text-amber-400 text-xs mt-0.5">—</div>
+                </div>
+                <div>
+                  <span class="text-slate-400 text-[10px] uppercase font-bold">Situation Trend</span>
+                  <div id="response-trend" class="font-bold text-white text-xs mt-0.5">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hospital Allocation & Capacity Section -->
+            <div class="sos-panel space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-darkBorder">
+                <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                  <i data-lucide="building-2" class="w-4 h-4 text-brand-teal"></i> Hospital Capacity Allocation (Prototype Data)
+                </h3>
+                <span id="hospital-allocation-status-badge" class="badge-success text-[10px] font-bold px-2 py-0.5 rounded">HOSPITAL A PRIMARY</span>
+              </div>
+              <div id="hospital-cards-container" class="space-y-2.5 text-xs"></div>
+            </div>
+
+            <!-- Response Status -->
+            <div class="sos-panel space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-darkBorder">
+                <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                  <i data-lucide="activity" class="w-4 h-4 text-brand-success"></i> Response Status (Demo Simulation)
+                </h3>
+                <span class="text-[10px] text-slate-400">Simulated workflows</span>
+              </div>
+              <div class="space-y-2 text-xs">
+                <div class="p-3 bg-slate-900/80 border border-darkBorder rounded-xl flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <i data-lucide="ambulance" class="w-4 h-4 text-brand-red"></i>
+                    <div>
+                      <span class="font-bold text-white">Ambulance #AMB-7</span>
+                      <span id="ambulance-status-line" class="text-[10px] text-slate-400 block">En route via optimized corridor</span>
+                    </div>
+                  </div>
+                  <span id="ambulance-badge" class="badge-critical text-[10px] font-bold px-2 py-0.5 rounded">● EN ROUTE (ETA 04:12)</span>
+                </div>
+
+                <div class="p-3 bg-slate-900/80 border border-darkBorder rounded-xl flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <i data-lucide="route" class="w-4 h-4 text-brand-blue"></i>
+                    <div>
+                      <span class="font-bold text-white">Traffic Control • Road Restriction</span>
+                      <span class="text-[10px] text-slate-400 block">Blocked road isolated • Blue reroute active</span>
+                    </div>
+                  </div>
+                  <span class="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-500/30">🚧 REROUTING</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Safety Panel: Do's and Don'ts -->
+            <div class="sos-panel space-y-3">
+              <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-darkBorder">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i> Emergency Safety Guidance
+              </h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="bg-emerald-950/20 border border-emerald-900/40 p-3 rounded-xl space-y-1.5">
+                  <span class="font-bold text-emerald-400 uppercase text-[10px]">DO:</span>
+                  <ul id="response-list-dos" class="space-y-1 text-gray-300"></ul>
+                </div>
+                <div class="bg-red-950/20 border border-red-900/40 p-3 rounded-xl space-y-1.5">
+                  <span class="font-bold text-red-400 uppercase text-[10px]">DON'T:</span>
+                  <ul id="response-list-donts" class="space-y-1 text-gray-300"></ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gemini Reassessment -->
+            <div class="sos-panel space-y-3">
+              <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-darkBorder">
+                <i data-lucide="refresh-cw" class="w-4 h-4 text-cyan-400"></i> Reassess Situation (Gemini)
+              </h3>
+              <p class="text-xs text-slate-400">Has the situation changed? Provide new observations or details for AI reassessment.</p>
+              <textarea id="reassess-input" rows="2" placeholder="e.g. Six people are injured or fire has spread..." class="w-full bg-slate-900 border border-darkBorder rounded-xl p-3 text-xs text-white outline-none"></textarea>
+              <button onclick="reassessSosSituation()" class="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl transition">
+                Reassess with Gemini & Update Hospital Allocation
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Right 5 cols -->
+          <div class="lg:col-span-5 space-y-6">
+            
+            <!-- Live Response Map Container with Custom UI Layer Toggle Overlay -->
+            <div class="sos-panel space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-darkBorder">
+                <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                  <i data-lucide="map-pinned" class="w-4 h-4 text-brand-blue"></i> Live Contextual Map
+                </h3>
+                <span class="text-[10px] text-brand-blue font-bold">🚨 Incident + 🚑 Ambulance + 🏥 Hospital</span>
+              </div>
+              <div style="height: 380px; position: relative; border-radius: 0.75rem; overflow: hidden;">
+                <div id="response-map"></div>
+                <!-- Custom UI Map Layer Toggle Overlay Controls -->
+                <div class="absolute top-3 right-3 z-[1000] bg-slate-900/95 backdrop-blur-md border border-darkBorder p-2.5 rounded-xl shadow-2xl space-y-1 text-[11px] font-semibold text-gray-200 pointer-events-auto">
+                  <div class="text-[10px] uppercase font-black text-brand-cyan mb-1 px-1 tracking-wider">Map Layers</div>
+                  <label class="flex items-center gap-2 cursor-pointer hover:text-white px-1 py-0.5 rounded">
+                    <input type="checkbox" id="layer-toggle-incident" checked onchange="toggleMapLayer('incident', this.checked)" class="rounded accent-cyan-500"> Incident Markers
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer hover:text-white px-1 py-0.5 rounded">
+                    <input type="checkbox" id="layer-toggle-route" checked onchange="toggleMapLayer('route', this.checked)" class="rounded accent-cyan-500"> Responder Routes
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer hover:text-white px-1 py-0.5 rounded">
+                    <input type="checkbox" id="layer-toggle-hospital" checked onchange="toggleMapLayer('hospital', this.checked)" class="rounded accent-cyan-500"> Hospital Capacity
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Map Legend -->
+              <div class="pt-2 border-t border-darkBorder flex flex-wrap gap-2 text-[10px] text-slate-300">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> 🚨 Incident</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> 🚑 Ambulance</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span> 🏥 Hospital</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> 🏠 Shelter</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span> 🚧 Road Closure</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block"></span> 🔵 Response Route</span>
+              </div>
+            </div>
+
+            <!-- Contextual Safe Locations -->
+            <div class="sos-panel space-y-3">
+              <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-darkBorder">
+                <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Contextual Safe Locations & Shelters
+              </h3>
+              <div id="safe-locations-list" class="space-y-2 text-xs">
+                <div class="p-2.5 bg-slate-900/80 border border-darkBorder rounded-xl flex items-center justify-between">
+                  <div>
+                    <span class="font-bold text-white">Mavdi Community Relief Centre</span>
+                    <span class="text-[10px] text-slate-400 block">Open Safe Area • 1.4 km away</span>
+                  </div>
+                  <span class="text-emerald-400 font-bold text-[11px]">SAFE ZONE</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Incident Updates Timeline -->
+            <div class="sos-panel space-y-3">
+              <h3 class="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-darkBorder">
+                <i data-lucide="clock" class="w-4 h-4 text-purple-400"></i> Continuous Incident Updates
+              </h3>
+              <div id="timeline-updates" class="space-y-2 text-xs font-mono">
+                <div class="flex items-center gap-2 text-gray-300">
+                  <span class="text-emerald-400 font-bold">✓</span>
+                  <span>Emergency report received and logged</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-300">
+                  <span class="text-emerald-400 font-bold">✓</span>
+                  <span>Gemini situation assessment completed</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-300">
+                  <span class="text-emerald-400 font-bold">✓</span>
+                  <span>Emergency response initiated & incident confirmed</span>
+                </div>
+                <div class="flex items-center gap-2 text-gray-300">
+                  <span class="text-blue-400 font-bold">🚧</span>
+                  <span>Road closure detected • alternative blue route calculated</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- 3. RESPONDER CAD TACTICAL MAP & ROUTING -->
+    <!-- ======================================================== -->
+    <section id="view-responder" class="tab-view hidden space-y-4">
+      <div class="bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center"><i data-lucide="radar" class="w-5 h-5"></i></div>
+          <div>
+            <div class="flex items-center gap-2"><h2 class="font-extrabold text-base text-slate-900 dark:text-white">SaharaAI Tactical Response Command</h2><span class="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">LIVE SIMULATION</span></div>
+            <p class="text-xs text-slate-500 dark:text-gray-400">Incident <span id="cad-incident-id" class="font-mono font-bold">INC-241</span> • Rajkot urban corridor</p>
+          </div>
+        </div>
+      </div>
+      <div class="wow-map-shell" style="height: 520px;">
+        <div id="tactical-map"></div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- 4. HOSPITAL COMMAND & SURGE PREDICTION -->
+    <!-- ======================================================== -->
+    <section id="view-hospital" class="tab-view hidden space-y-6">
+      <div class="bg-white dark:bg-darkCard border border-lightBorder dark:border-darkBorder rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-brand-teal flex items-center justify-center font-bold">
+            <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h2 class="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">Gokul Superspeciality Hospital • Command Grid</h2>
+            <p class="text-xs text-slate-500 dark:text-gray-400">Emergency Sector 3 • Integrated Health Network</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="sos-panel space-y-3">
+          <h3 class="font-extrabold text-sm text-white uppercase tracking-wider">Hospital Resources</h3>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="p-3 bg-slate-900 rounded-xl"><span class="text-slate-400 block text-[10px]">ICU Beds</span><span class="text-xl font-bold text-white">3 / 12</span></div>
+            <div class="p-3 bg-slate-900 rounded-xl"><span class="text-slate-400 block text-[10px]">Blood Units</span><span class="text-xl font-bold text-white">16 Units</span></div>
+          </div>
+        </div>
+        <div class="sos-panel space-y-3">
+          <h3 class="font-extrabold text-sm text-white uppercase tracking-wider">Surge Forecast (Next 6h)</h3>
+          <div class="h-44 w-full"><canvas id="hospitalSurgeChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- 5. VOLUNTEER HUB & CIVIL DEFENSE -->
+    <!-- ======================================================== -->
+    <section id="view-volunteer" class="tab-view hidden space-y-6">
+      <div class="bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-5 text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-xl">🤝</div>
+          <div>
+            <h2 class="font-black text-lg tracking-tight">Civil Defense & Community Volunteer Hub</h2>
+            <p class="text-xs text-amber-100">AI-powered skill matching connecting trained citizens with local relief tasks</p>
+          </div>
+        </div>
+      </div>
+      <div class="sos-panel space-y-3">
+        <h3 class="font-extrabold text-sm text-white uppercase tracking-wider">Active Relief Missions</h3>
+        <div class="p-4 bg-slate-900 rounded-xl flex items-center justify-between text-xs">
+          <div><b>First Aid Support • Ring Road</b><p class="text-slate-400 text-[11px]">Assist paramedics on scene.</p></div>
+          <button onclick="claimTask(this)" class="px-4 py-1.5 bg-brand-red text-white font-bold rounded-lg text-xs">Accept Mission</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- 6. EARLY WARNING NETWORK -->
+    <!-- ======================================================== -->
+    <section id="view-earlywarning" class="tab-view hidden space-y-6">
+      <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 rounded-2xl p-5 text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-xl">⚡</div>
+          <div>
+            <h2 class="font-black text-lg tracking-tight">AI Early Warning & Flood Forecasting Network</h2>
+            <p class="text-xs text-blue-100">Sensor Station 04 • Aji River Basin</p>
+          </div>
+        </div>
+      </div>
+      <div class="sos-panel space-y-4">
+        <h3 class="font-extrabold text-sm text-white uppercase tracking-wider">Aji River Hydrograph</h3>
+        <div class="h-64 w-full"><canvas id="riverGaugeChart"></canvas></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- OFFLINE MESH SIMULATION MODAL -->
+  <div id="offline-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="sos-panel max-w-lg w-full space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-darkBorder">
+        <div class="flex items-center gap-2 text-brand-red font-bold">
+          <i data-lucide="radio-tower" class="w-5 h-5"></i>
+          <h3 class="text-base text-white">Offline Mesh Relay Architecture</h3>
+        </div>
+        <button onclick="hideOfflineSimModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+      <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-gray-300">
+        When cellular towers collapse, SaharaAI switches to Bluetooth Low Energy (BLE) & WiFi-Direct peer-to-peer mesh.
+      </div>
+      <button onclick="hideOfflineSimModal()" class="w-full py-2.5 bg-brand-red text-white font-bold text-xs rounded-xl hover:bg-red-600 transition">Close Simulator</button>
+    </div>
+  </div>
+
+  <!-- GLOBAL FOOTER -->
+  <footer class="mt-auto border-t border-lightBorder dark:border-darkBorder bg-white dark:bg-darkCard py-6 text-xs text-slate-500 dark:text-gray-400">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <div class="w-5 h-5 rounded bg-brand-red text-white flex items-center justify-center text-[10px] font-black">S</div>
+        <span class="font-extrabold text-slate-800 dark:text-gray-200">SaharaAI • National Disaster Grid</span>
+      </div>
+      <button onclick="window.scrollTo({top:0, behavior:'smooth'})" class="hover:text-brand-red">Back to top &uarr;</button>
+    </div>
+  </footer>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    lucide.createIcons();
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('sahara_theme');
+      if (savedTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+        updateThemeUI('light');
+      } else {
+        document.documentElement.classList.add('dark');
+        updateThemeUI('dark');
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('sahara_theme', 'light');
+        updateThemeUI('light');
+      } else {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('sahara_theme', 'dark');
+        updateThemeUI('dark');
+      }
+      renderCharts();
+    }
+
+    function updateThemeUI(theme) {
+      const icon = document.getElementById('theme-icon');
+      if (theme === 'light') {
+        if (icon) icon.innerHTML = '<i data-lucide="moon" class="w-4 h-4 text-slate-700"></i>';
+      } else {
+        if (icon) icon.innerHTML = '<i data-lucide="sun" class="w-4 h-4 text-amber-500"></i>';
+      }
+      lucide.createIcons();
+    }
+
+    initTheme();
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
+      const targetView = document.getElementById('view-' + tabName);
+      if (targetView) targetView.classList.remove('hidden');
+
+      const dropdown = document.getElementById('nav-dropdown');
+      if (dropdown) dropdown.value = tabName;
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (tabName === 'responder') { setTimeout(initTacticalMap, 150); }
+      if (tabName === 'hospital' || tabName === 'earlywarning') { setTimeout(renderCharts, 150); }
+      if (tabName === 'citizen') {
+        backToIntake();
+      }
+    }
+
+    const EMERGENCY_PROFILES = {
+      'Fire': {
+        placeholder: 'Example: There is a fire inside a building. Smoke is spreading and people are trying to evacuate...',
+        suggestions: ['Fire spreading', 'Heavy smoke', 'Person severely injured', 'Person unconscious', 'People trapped', 'Exit blocked', 'Electrical hazard', 'Gas/fuel suspected', 'People evacuating']
+      },
+      'Road Crash': {
+        placeholder: 'Example: Two vehicles collided near an intersection. One person appears injured...',
+        suggestions: ['Multiple vehicles', 'Person injured', 'Person unconscious', 'Severe bleeding observed', 'Person needs urgent medical help', 'Road blocked', 'Vehicle on fire', 'Fuel leaking', 'People trapped', 'Traffic affected']
+      },
+      'Flood': {
+        placeholder: 'Example: Water is rising on the road and several people are stranded...',
+        suggestions: ['Water rising', 'Vehicles stranded', 'Person stranded', 'People trapped', 'Homes flooded', 'Electrical hazard', 'Bridge affected', 'Road blocked', 'Children at risk', 'Elderly person at risk']
+      },
+      'Collapse': {
+        placeholder: 'Example: A building has partially collapsed. I can hear someone calling for help...',
+        suggestions: ['Person trapped', 'Person injured', 'Person unconscious', 'Multiple people trapped', 'Structure unstable', 'Heavy dust', 'Fire/smoke', 'Electrical hazard', 'Exit blocked', 'Further collapse possible']
+      },
+      'Medical': {
+        placeholder: 'Example: A person is unconscious and not responding...',
+        suggestions: ['Person unconscious', 'Severe bleeding', 'Chest pain', 'Difficulty breathing', 'Serious injury', 'Person collapsed', 'Possible head injury', 'Possible fracture', 'Pregnancy emergency', 'Child needs urgent help']
+      },
+      'Other': {
+        placeholder: 'Describe the emergency in your own words...',
+        suggestions: ['Person injured', 'Person unconscious', 'Multiple people affected', 'Road blocked', 'Fire/smoke', 'Electrical hazard', 'Water/flooding', 'Structural danger', 'Urgent medical help needed']
+      }
+    };
+
+    let selectedEmergencyType = 'Road Crash';
+    let pendingVoice = null;
+    let pendingSceneImage = null;
+    let userLocation = { latitude: 22.3039, longitude: 70.8022 };
+    let currentAssessment = null;
+
+    let responseMap = null;
+    let incidentLayerGroup = null;
+    let routeLayerGroup = null;
+    let hospitalLayerGroup = null;
+
+    let hospitalData = [
+      { id: 'H1', name: 'Gokul Superspeciality Hospital', lat: 22.2917, lng: 70.7936, capacity: 2, status: 'FULL', distance: '2.8 km' },
+      { id: 'H2', name: 'Sterling Hospital', lat: 22.2865, lng: 70.7818, capacity: 6, status: 'ACCEPTING', distance: '4.2 km' },
+      { id: 'H3', name: 'Civil Hospital Rajkot', lat: 22.3120, lng: 70.8150, capacity: 12, status: 'ACCEPTING', distance: '3.5 km' }
+    ];
+
+    function selectEmergencyType(btn, typeName) {
+      selectedEmergencyType = typeName;
+      document.querySelectorAll('.em-type-btn').forEach(b => {
+        b.className = 'em-type-btn p-2.5 rounded-xl border border-darkBorder bg-slate-800 text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-brand-blue transition';
+      });
+      btn.className = 'em-type-btn p-2.5 rounded-xl border-2 border-brand-red bg-red-500/10 text-brand-red text-center font-bold text-xs flex flex-col items-center gap-1 transition';
+
+      updateEmergencyProfileUI(typeName);
+    }
+
+    function updateEmergencyProfileUI(typeName) {
+      const profile = EMERGENCY_PROFILES[typeName] || EMERGENCY_PROFILES['Other'];
+      const textarea = document.getElementById('incident-message');
+      if (textarea) textarea.placeholder = profile.placeholder;
+
+      const container = document.getElementById('suggestion-chips-container');
+      if (container) {
+        container.innerHTML = profile.suggestions.map(phrase => `
+          <button type="button" onclick="toggleSuggestion(this, '${escapeHtml(phrase)}')" class="suggestion-chip">
+            <span>+</span> ${escapeHtml(phrase)}
+          </button>
+        `).join('');
+      }
+    }
+
+    function toggleSuggestion(chipEl, phrase) {
+      const textarea = document.getElementById('incident-message');
+      if (!textarea) return;
+
+      const isActive = chipEl.classList.toggle('active');
+      let current = textarea.value.trim();
+
+      if (isActive) {
+        if (current) {
+          textarea.value = current + (current.endsWith('.') ? ' ' : '. ') + phrase + '.';
+        } else {
+          textarea.value = phrase + '.';
+        }
+      } else {
+        textarea.value = current.replace(new RegExp(escapeRegExp(phrase) + '\\.?', 'gi'), '').trim();
+      }
+    }
+
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initLanguage();
+      requestUserLocation();
+      updateEmergencyProfileUI('Road Crash');
+      if(window.lucide) lucide.createIcons();
+    });
+
+    function requestUserLocation() {
+      const status = document.getElementById('gps-status');
+      if (!navigator.geolocation) { userLocation = { latitude: 22.3039, longitude: 70.8022 }; if (status) status.textContent = 'Rajkot (Default)'; return; }
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          userLocation = { latitude: Number(pos.coords.latitude.toFixed(6)), longitude: Number(pos.coords.longitude.toFixed(6)) };
+          if (status) status.textContent = `${userLocation.latitude}, ${userLocation.longitude}`;
+        },
+        () => {
+          userLocation = { latitude: 22.3039, longitude: 70.8022 };
+          if (status) status.textContent = 'Manual / Default';
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+
+    let isRecording = false;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+
+    async function toggleVoiceRecording() {
+      const micIcon = document.getElementById('voice-mic-icon');
+      const statusText = document.getElementById('voice-status-text');
+      if (isRecording) { if (mediaRecorder) mediaRecorder.stop(); return; }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach(t => t.stop());
+          isRecording = false;
+          micIcon.classList.remove('animate-ping', 'bg-red-600');
+          statusText.textContent = 'Voice Recorded ✓';
+          const msg = document.getElementById('incident-message');
+          if (msg && !msg.value.trim()) msg.value = `[Voice report recorded for ${selectedEmergencyType}]`;
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        micIcon.classList.add('animate-ping', 'bg-red-600');
+        statusText.textContent = 'Listening…';
+      } catch (err) { alert(`Microphone access failed: ${err.message}`); }
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onloadend = () => res(String(r.result).split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+    }
+
+    async function handleSceneFile(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      pendingSceneImage = { dataBase64: await blobToBase64(file), mimeType: file.type };
+      const status = document.getElementById('photo-attached-status');
+      if (status) status.innerHTML = `<span class='text-brand-blue font-bold'>Photo attached ✓</span>`;
+    }
+
+    async function analyzeSosReport(additionalText = '') {
+      const text = document.getElementById('incident-message')?.value.trim() || `Emergency type: ${selectedEmergencyType}`;
+      const fullText = additionalText ? `${text} \nFollow-up answer: ${additionalText}` : text;
+      
+      const btn = document.getElementById('analyze-report-btn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="animate-pulse">GEMINI ANALYZING REPORT…</span>'; }
+
+      setTimeout(() => {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="cpu" class="w-5 h-5 text-cyan-200"><span>ANALYZE REPORT WITH GEMINI</span></i>'; lucide.createIcons(); }
+
+        currentAssessment = generateGeminiAssessment(selectedEmergencyType, fullText);
+        renderAssessment(currentAssessment);
+        
+        document.getElementById('assessment-placeholder').classList.add('hidden');
+        document.getElementById('assessment-container').classList.remove('hidden');
+      }, 1000);
+    }
+
+    function generateGeminiAssessment(type, desc) {
+      let sev = 'HIGH';
+      if (type === 'Medical' || type === 'Fire' || type === 'Collapse') sev = 'CRITICAL';
+      if (type === 'Other') sev = 'MODERATE';
+
+      let casualties = 2;
+      if (desc.toLowerCase().includes('six') || desc.toLowerCase().includes('6')) casualties = 6;
+      else if (desc.toLowerCase().includes('multiple') || desc.toLowerCase().includes('several')) casualties = 4;
+
+      return {
+        incidentType: type,
+        severity: sev,
+        summary: `Citizen reported a ${type.toLowerCase()} emergency: "${desc.slice(0, 95)}..."`,
+        peopleAtRisk: `${casualties} people affected / injured`,
+        estimatedCasualties: casualties,
+        situationTrend: 'POTENTIALLY WORSENING',
+        observedFacts: [
+          `${type} incident reported at coordinates near Rajkot Sector 3`,
+          `Initial description: "${desc.slice(0, 110)}"`,
+          `${casualties} casualties/persons reported affected`
+        ],
+        possibleHazards: [
+          type === 'Flood' ? 'Rising water levels & submerged electrical hazards' :
+          type === 'Fire' ? 'Smoke inhalation, rapid flame spread, structural weakness' :
+          type === 'Collapse' ? 'Secondary structural collapse, falling debris, dust' :
+          type === 'Road Crash' ? 'Fuel leakage, oncoming traffic hazard, glass shards' :
+          'Secondary complications, delayed stabilization'
+        ],
+        unknownInformation: [
+          'Current structural or environmental stability',
+          'Immediate emergency responder on-scene status'
+        ],
+        followUpQuestions: [
+          type === 'Flood' ? 'Is water entering residential or commercial structures?' :
+          type === 'Fire' ? 'Are people trapped on upper floors?' :
+          type === 'Collapse' ? 'Can you hear voices or tapping from underneath debris?' :
+          'Are there any fuel leaks or fire hazards present?'
+        ],
+        dos: [
+          'Move to a safe, well-lit elevated or open location',
+          'Keep emergency access corridors clear for ambulances',
+          'Stay calm and keep your phone accessible'
+        ],
+        donts: [
+          type === 'Collapse' ? 'Do not enter the unstable structure' : 'Do not re-enter hazardous zones',
+          'Do not move severely injured persons unless in immediate danger',
+          'Do not crowd the emergency incident perimeter'
+        ]
+      };
+    }
+
+    function renderAssessment(asst) {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      set('assessment-summary', asst.summary);
+      set('assessment-people', asst.peopleAtRisk);
+      set('assessment-trend', asst.situationTrend);
+
+      const sevBadge = document.getElementById('assessment-severity-badge');
+      if (sevBadge) {
+        sevBadge.textContent = `${asst.severity} SEVERITY`;
+        sevBadge.className = asst.severity === 'CRITICAL' ? 'badge-critical text-[10px] font-bold px-2.5 py-0.5 rounded-full animate-pulse' : 'badge-warning text-[10px] font-bold px-2.5 py-0.5 rounded-full';
+      }
+
+      const fillList = (id, arr) => {
+        const ul = document.getElementById(id);
+        if (ul) ul.innerHTML = arr.map(x => `<li>${escapeHtml(x)}</li>`).join('');
+      };
+      fillList('list-observed', asst.observedFacts);
+      fillList('list-hazards', asst.possibleHazards);
+      fillList('list-unknown', asst.unknownInformation);
+      fillList('list-dos', asst.dos);
+      fillList('list-donts', asst.donts);
+
+      const fbox = document.getElementById('followup-box');
+      const ftxt = document.getElementById('followup-question-text');
+      if (asst.followUpQuestions?.length > 0) {
+        if (ftxt) ftxt.textContent = asst.followUpQuestions[0];
+        if (fbox) fbox.classList.remove('hidden');
+      } else {
+        if (fbox) fbox.classList.add('hidden');
+      }
+    }
+
+    function submitFollowUpAnswer() {
+      const ans = document.getElementById('followup-answer-input')?.value.trim();
+      if (!ans) return;
+      document.getElementById('followup-answer-input').value = '';
+      document.getElementById('followup-box').classList.add('hidden');
+      analyzeSosReport(ans);
+    }
+
+    function resetSosIntake() {
+      currentAssessment = null;
+      document.getElementById('incident-message').value = '';
+      document.getElementById('assessment-container').classList.add('hidden');
+      document.getElementById('assessment-placeholder').classList.remove('hidden');
+    }
+
+    function evaluateHospitalAllocation(casualties) {
+      hospitalData.forEach(h => {
+        if (h.id === 'H1') {
+          h.status = casualties > h.capacity ? 'FULL' : 'ACCEPTING';
+        }
+      });
+    }
+
+    function confirmAndStartResponse() {
+      if (!currentAssessment) { alert('Please complete the report analysis first.'); return; }
+      
+      evaluateHospitalAllocation(currentAssessment.estimatedCasualties);
+
+      document.getElementById('sos-screen-a').classList.add('hidden');
+      document.getElementById('sos-screen-b').classList.remove('hidden');
+
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      set('response-type', currentAssessment.incidentType);
+      set('response-summary', currentAssessment.summary);
+      set('response-people', currentAssessment.peopleAtRisk);
+      set('response-trend', currentAssessment.situationTrend);
+      
+      const sevBadge = document.getElementById('response-severity-badge');
+      if (sevBadge) sevBadge.textContent = currentAssessment.severity;
+
+      const fillList = (id, arr) => {
+        const ul = document.getElementById(id);
+        if (ul) ul.innerHTML = arr.map(x => `<li>${escapeHtml(x)}</li>`).join('');
+      };
+      fillList('response-list-dos', currentAssessment.dos);
+      fillList('response-list-donts', currentAssessment.donts);
+
+      renderHospitalAllocationCards();
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(initResponseMap, 150);
+    }
+
+    function renderHospitalAllocationCards() {
+      const container = document.getElementById('hospital-cards-container');
+      if (!container) return;
+
+      const primary = hospitalData[0];
+      const alternate = hospitalData.find(h => h.status === 'ACCEPTING') || hospitalData[1];
+      
+      const isPrimaryFull = primary.status === 'FULL';
+      const badgeStatus = isPrimaryFull ? '<span class="badge-critical text-[10px] font-bold px-2 py-0.5 rounded">🔴 FULL — REROUTING</span>' : '<span class="badge-success text-[10px] font-bold px-2 py-0.5 rounded">🟢 PRIMARY ACCEPTING</span>';
+
+      document.getElementById('hospital-allocation-status-badge').innerHTML = isPrimaryFull ? 'HOSPITAL A FULL → ALTERNATE ACTIVE' : 'HOSPITAL A PRIMARY';
+
+      container.innerHTML = `
+        <div class="p-3 bg-slate-900/80 border ${isPrimaryFull ? 'border-red-500/50' : 'border-darkBorder'} rounded-xl flex items-center justify-between">
+          <div>
+            <span class="font-bold text-white">🏥 Primary: ${escapeHtml(primary.name)}</span>
+            <span class="text-[10px] text-slate-400 block">Capacity: ${primary.capacity} beds • Distance: ${primary.distance}</span>
+          </div>
+          <div>${badgeStatus}</div>
+        </div>
+        <div class="p-3 bg-slate-900/80 border border-emerald-500/30 rounded-xl flex items-center justify-between">
+          <div>
+            <span class="font-bold text-white">🏥 Alternate: ${escapeHtml(alternate.name)}</span>
+            <span class="text-[10px] text-slate-400 block">Capacity: ${alternate.capacity} beds available • Distance: ${alternate.distance}</span>
+          </div>
+          <span class="badge-success text-[10px] font-bold px-2 py-0.5 rounded">🟢 ACCEPTING CASUALTIES</span>
+        </div>
+      `;
+    }
+
+    function backToIntake() {
+      document.getElementById('sos-screen-b').classList.add('hidden');
+      document.getElementById('sos-screen-a').classList.remove('hidden');
+    }
+
+    // Leaflet Response Map Initialization with LayerGroups
+    function initResponseMap() {
+      const el = document.getElementById('response-map');
+      if (!el || typeof L === 'undefined') return;
+      if (responseMap) { responseMap.invalidateSize(); return; }
+
+      const incCoord = [userLocation.latitude, userLocation.longitude];
+      responseMap = L.map('response-map', { zoomControl: true }).setView(incCoord, 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(responseMap);
+
+      incidentLayerGroup = L.layerGroup().addTo(responseMap);
+      routeLayerGroup = L.layerGroup().addTo(responseMap);
+      hospitalLayerGroup = L.layerGroup().addTo(responseMap);
+
+      // 1. Incident Layer Group
+      const incMarker = L.marker(incCoord, { 
+        icon: L.divIcon({className:'', html:'<div style="background:#EF4444;color:#fff;padding:6px 10px;border-radius:8px;font-weight:900;font-size:10px;box-shadow:0 0 15px rgba(239,68,68,0.6);border:2px solid #fff;">🚨 INCIDENT SAH-2026-0001</div>', iconSize:null, iconAnchor:[50,15]}),
+        zIndexOffset: 1000 
+      }).bindPopup('<b>🚨 INCIDENT #SAH-2026-0001</b><br>Active emergency report verified');
+      incidentLayerGroup.addLayer(incMarker);
+
+      const shelterCoord = [incCoord[0] - 0.006, incCoord[1] + 0.007];
+      const shelterMarker = L.marker(shelterCoord, {
+        icon: L.divIcon({className:'', html:'<div style="background:#F59E0B;color:#000;padding:3px 6px;border-radius:4px;font-weight:bold;font-size:9px;">🏠 Mavdi Shelter</div>', iconSize:null})
+      }).bindPopup('<b>Mavdi Community Relief Centre</b><br>Safe Shelter (1.4 km)');
+      incidentLayerGroup.addLayer(shelterMarker);
+
+      // 2. Hospital Layer Group
+      hospitalData.forEach((h) => {
+        const color = h.status === 'FULL' ? '#EF4444' : '#3B82F6';
+        const hMarker = L.marker([h.lat, h.lng], {
+          icon: L.divIcon({className:'', html:`<div style="background:${color};color:#fff;padding:4px 8px;border-radius:6px;font-weight:bold;font-size:9px;border:1px solid #fff;">🏥 ${escapeHtml(h.name)} (${h.status})</div>`, iconSize:null, iconAnchor:[40,15]}),
+          zIndexOffset: 500
+        }).bindPopup(`<b>${escapeHtml(h.name)}</b><br>Capacity: ${h.capacity} beds<br>Status: ${h.status}<br>Distance: ${h.distance}`);
+        hospitalLayerGroup.addLayer(hMarker);
+      });
+
+      // 3. Route Layer Group
+      const ambCoord = [incCoord[0] + 0.007, incCoord[1] - 0.008];
+      const ambMarker = L.marker(ambCoord, {
+        icon: L.divIcon({className:'', html:'<div style="background:#22C55E;color:#04241b;padding:5px 8px;border-radius:8px;font-weight:900;font-size:10px;box-shadow:0 0 15px rgba(34,197,94,0.6);border:2px solid #fff;">🚑 AMB-7 (ETA 04:12)</div>', iconSize:null, iconAnchor:[45,15]}),
+        zIndexOffset: 900
+      }).bindPopup('<b>🚑 Ambulance A-01 / AMB-7</b><br>Prototype Response Simulation<br>EN ROUTE • 1.8 km remaining');
+      routeLayerGroup.addLayer(ambMarker);
+
+      const closureCoord = [incCoord[0] + 0.003, incCoord[1] - 0.003];
+      const closureMarker = L.marker(closureCoord, {
+        icon: L.divIcon({className:'', html:'<div style="background:#DC2626;color:#fff;padding:3px 6px;border-radius:4px;font-weight:bold;font-size:9px;">🚧 ROAD CLOSED</div>', iconSize:null})
+      }).bindPopup('<b>🚧 Road Blocked</b><br>Direct corridor restricted');
+      routeLayerGroup.addLayer(closureMarker);
+
+      const primaryHosp = hospitalData[0].status === 'FULL' ? hospitalData[1] : hospitalData[0];
+      const blueRoute = [
+        ambCoord,
+        [incCoord[0] + 0.005, incCoord[1] - 0.005],
+        incCoord,
+        [incCoord[0] - 0.002, incCoord[1] + 0.003],
+        [primaryHosp.lat, primaryHosp.lng]
+      ];
+      const routePolyline = L.polyline(blueRoute, { color: '#3B82F6', weight: 5, opacity: 0.9 })
+        .bindPopup('<b>Demo Route — Prototype Simulation</b><br>Optimized response route avoiding road closure.');
+      routeLayerGroup.addLayer(routePolyline);
+
+      responseMap.fitBounds(L.featureGroup([incMarker, ambMarker]).getBounds().pad(0.3));
+
+      startAmbulanceSimulation(ambMarker, incCoord);
+    }
+
+    function toggleMapLayer(layerName, show) {
+      if (!responseMap) return;
+      if (layerName === 'incident') {
+        if (show) { if (incidentLayerGroup && !responseMap.hasLayer(incidentLayerGroup)) responseMap.addLayer(incidentLayerGroup); }
+        else { if (incidentLayerGroup && responseMap.hasLayer(incidentLayerGroup)) responseMap.removeLayer(incidentLayerGroup); }
+      } else if (layerName === 'route') {
+        if (show) { if (routeLayerGroup && !responseMap.hasLayer(routeLayerGroup)) responseMap.addLayer(routeLayerGroup); }
+        else { if (routeLayerGroup && responseMap.hasLayer(routeLayerGroup)) responseMap.removeLayer(routeLayerGroup); }
+      } else if (layerName === 'hospital') {
+        if (show) { if (hospitalLayerGroup && !responseMap.hasLayer(hospitalLayerGroup)) responseMap.addLayer(hospitalLayerGroup); }
+        else { if (hospitalLayerGroup && responseMap.hasLayer(hospitalLayerGroup)) responseMap.removeLayer(hospitalLayerGroup); }
+      }
+    }
+
+    let ambSimInterval = null;
+    function startAmbulanceSimulation(marker, targetCoord) {
+      if (ambSimInterval) clearInterval(ambSimInterval);
+      let step = 0;
+      const startLat = targetCoord[0] + 0.007;
+      const startLng = targetCoord[1] - 0.008;
+
+      ambSimInterval = setInterval(() => {
+        step++;
+        const currentLat = startLat + (targetCoord[0] - startLat) * (step / 20);
+        const currentLng = startLng + (targetCoord[1] - startLng) * (step / 20);
+        marker.setLatLng([currentLat, currentLng]);
+
+        const remKm = Math.max(0.2, (2.8 - (step * 0.13))).toFixed(1);
+        const etaMin = Math.max(1, 4 - Math.floor(step / 6));
+        const etaSec = String(Math.max(0, 48 - (step * 8)) % 60).padStart(2, '0');
+
+        const line = document.getElementById('ambulance-status-line');
+        const badge = document.getElementById('ambulance-badge');
+        if (line) line.textContent = `EN ROUTE • ${remKm} km remaining • ETA 0${etaMin}:${etaSec}`;
+
+        if (step >= 20) {
+          clearInterval(ambSimInterval);
+          if (line) line.textContent = 'ARRIVED AT INCIDENT SCENE';
+          if (badge) { badge.textContent = '● ARRIVED'; badge.className = 'badge-success text-[10px] font-bold px-2 py-0.5 rounded'; }
+        }
+      }, 1000);
+    }
+
+    function reassessSosSituation() {
+      const input = document.getElementById('reassess-input');
+      const text = input?.value.trim();
+      if (!text) { alert('Please enter new information for reassessment.'); return; }
+      input.value = '';
+
+      if (currentAssessment) {
+        currentAssessment.severity = 'CRITICAL';
+        currentAssessment.summary += ` [REASSESSMENT UPDATE: ${text}]`;
+        currentAssessment.situationTrend = 'WORSENING';
+        
+        if (text.toLowerCase().includes('six') || text.toLowerCase().includes('6') || text.toLowerCase().includes('multiple')) {
+          currentAssessment.estimatedCasualties = 6;
+        }
+
+        evaluateHospitalAllocation(currentAssessment.estimatedCasualties);
+        renderHospitalAllocationCards();
+
+        const timeline = document.getElementById('timeline-updates');
+        if (timeline) {
+          const timeStr = new Date().toLocaleTimeString();
+          const div = document.createElement('div');
+          div.className = 'flex items-center gap-2 text-amber-400 font-bold';
+          div.innerHTML = `<span class="text-brand-red">⚠</span><span>[${timeStr}] Hospital A capacity reached. Alternate Hospital B identified & route updated.</span>`;
+          timeline.appendChild(div);
+        }
+
+        alert('Gemini reassessed the incident. Hospital allocation automatically shifted to Alternate Hospital B due to casualty count.');
+      }
+    }
+
+    let map = null, tileLayer = null;
+    const wowIncidents = [
+      {id:'INC-241',p:'P1',title:'Multi-vehicle collision',area:'Raiya Road corridor',lat:22.3039,lng:70.8022},
+      {id:'INC-238',p:'P1',title:'Medical emergency',area:'Kalawad Road',lat:22.3104,lng:70.7705}
+    ];
+
+    function wowIcon(cls, html){ return L.divIcon({className:'',html:`<div class="${cls}">${html||''}</div>`,iconSize:null,iconAnchor:[12,12]}); }
+
+    function initTacticalMap(){
+      const el = document.getElementById('tactical-map');
+      if(!el || typeof L==='undefined') return;
+      if(map){ setTimeout(()=>map.invalidateSize(),50); return; }
+      map = L.map('tactical-map',{zoomControl:true}).setView([22.3039,70.8022],13);
+      tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+      wowIncidents.forEach(x => L.marker([x.lat,x.lng],{icon:wowIcon('wowMarker',x.p)}).addTo(map));
+    }
+
+    let hydroChart = null, surgeChart = null;
+    function renderCharts(){
+      const isDark = document.documentElement.classList.contains('dark');
+      const tc = isDark ? '#9CA3AF' : '#4B5563';
+      const gc = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+      const riverCtx = document.getElementById('riverGaugeChart');
+      if(riverCtx && typeof Chart !== 'undefined'){
+        if(hydroChart) hydroChart.destroy();
+        hydroChart = new Chart(riverCtx,{
+          type:'line',
+          data:{
+            labels:['02:00','04:00','06:00','08:00','10:00','12:00','14:00'],
+            datasets:[{label:'Observed (m)', data:[38.2,39.1,40.4,41.8,43.1,44.0,44.8], borderColor:'#3B82F6', fill:true, backgroundColor:'rgba(59,130,246,0.1)'}]
+          },
+          options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{ticks:{color:tc}, grid:{color:gc}}, y:{ticks:{color:tc}, grid:{color:gc}, min:36, max:48} } }
+        });
+      }
+
+      const surgeCtx = document.getElementById('hospitalSurgeChart');
+      if(surgeCtx && typeof Chart !== 'undefined'){
+        if(surgeChart) surgeChart.destroy();
+        surgeChart = new Chart(surgeCtx,{
+          type:'bar',
+          data:{ labels:['12:00','13:00','14:00','15:00','16:00'], datasets:[{data:[2,3,7,11,8], backgroundColor:'#14B8A6', borderRadius:6}] },
+          options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{ticks:{color:tc}, grid:{display:false}}, y:{ticks:{color:tc}, grid:{color:gc}} }, plugins:{legend:{display:false}} }
+        });
+      }
+    }
+
+    function claimTask(btn){ btn.textContent='Accepted ✓'; btn.className='px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-lg text-xs'; }
+    function showOfflineSimModal(){ document.getElementById('offline-modal').classList.remove('hidden'); document.getElementById('offline-modal').classList.add('flex'); }
+    function hideOfflineSimModal(){ document.getElementById('offline-modal').classList.remove('flex'); document.getElementById('offline-modal').classList.add('hidden'); }
+
+    function setLanguage(lang){
+      document.documentElement.lang = lang;
+      localStorage.setItem('sahara-language', lang);
+    }
+    function initLanguage(){
+      const s = localStorage.getItem('sahara-language') || 'en';
+      const sel = document.getElementById('language-select');
+      if(sel) sel.value = s;
+      setLanguage(s);
+    }
+
+    function escapeHtml(str){ return String(str).replace(/[&<>'"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  </script>
+</body>
+</html>

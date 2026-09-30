@@ -1,0 +1,7 @@
+{
+  "name": "SaharaAI — National Disaster Grid & Emergency Command",
+  "description": "National Disaster Grid & Emergency Command system connecting citizens, NDRF responders, hospitals, volunteers, and early warning systems.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

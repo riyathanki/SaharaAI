@@ -1,0 +1,16 @@
+{
+  "name": "sahara-ai",
+  "version": "1.0.0",
+  "description": "SaharaAI National Disaster Grid",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'Build complete'",
+    "lint": "echo 'Lint complete'"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
