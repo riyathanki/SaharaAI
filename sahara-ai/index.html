@@ -101,13 +101,13 @@
       <div class="flex items-center gap-2">
         <span class="inline-block w-2 h-2 rounded-full bg-white animate-ping"></span>
         <span class="tracking-wide uppercase font-bold">National Disaster Grid • Rajkot Emergency Command Active</span>
-        <span class="hidden md:inline text-red-100 font-normal">| Connected to NDRF Sector 6 & 108 Emergency Fleet</span>
+        <span class="hidden md:inline text-red-100 font-normal">| Prototype integrations • emergency-service connections are not live</span>
       </div>
       <div class="flex items-center gap-3">
         <span class="hidden sm:inline bg-black/25 px-2 py-0.5 rounded text-[11px] font-mono">LAT: 22.3039 | LON: 70.8022</span>
         <button onclick="showOfflineSimModal()" class="bg-white/20 hover:bg-white/30 text-white text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1 transition">
           <i data-lucide="radio" class="w-3 h-3 text-emerald-300"></i>
-          <span>Offline Mesh: Ready</span>
+          <span id="backend-status-label">Backend: checking…</span>
         </button>
       </div>
     </div>
@@ -257,7 +257,7 @@
             </div>
 
             <p class="text-sm text-slate-600 dark:text-gray-300 leading-relaxed mb-6">
-              Empowering citizens, NDRF responders, hospitals, and civil volunteers during acute crises. Instant Gemini 2.0 triage converts voice notes and disaster photos into CAD routing, hospital surge prep, and resource mobilization in &lt;90 seconds.
+              Prototype emergency coordination workflow using Google Gemini for multimodal triage; external dispatch and hospital systems are not connected.
             </p>
           </div>
 
@@ -321,7 +321,7 @@
                   <div class="flex items-center gap-1.5 font-mono font-bold text-brand-red">
                     <i data-lucide="flame" class="w-3.5 h-3.5"></i> #INC-001 • ROAD COLLAPSE & TRAFFIC
                   </div>
-                  <span class="bg-red-500 text-white font-bold text-[10px] px-1.5 py-0.5 rounded">HIGH SEVERITY</span>
+                  <span id="cad-severity" class="bg-red-500 text-white font-bold text-[10px] px-1.5 py-0.5 rounded">—</span>
                 </div>
                 <p class="text-xs text-slate-700 dark:text-gray-300 font-medium">Rajkot Ring Road (22.3039, 70.8022) — Direct corridor impassable.</p>
                 <div class="flex items-center justify-between mt-2 pt-2 border-t border-red-500/10 text-[11px] text-slate-500 dark:text-gray-400">
@@ -369,9 +369,9 @@
               AI
             </div>
             <div class="text-xs">
-              <span class="font-bold text-purple-700 dark:text-purple-300">Gemini 2.0 Flash Autonomous Triage:</span>
+              <span class="font-bold text-purple-700 dark:text-purple-300">Google Gemini AI Triage (prototype):</span>
               <p class="text-slate-600 dark:text-gray-300 text-[11px] mt-0.5">
-                Multi-agency dispatch executed in 38s. Road hazard bypassed; hospital prepared 4m in advance of ambulance arrival.
+                AI-generated coordination view. Dispatch, hospital and responder actions are recorded as prototype workflow events.
               </p>
             </div>
           </div>
@@ -409,7 +409,7 @@
                 <span class="bg-red-500/10 text-brand-red text-xs font-bold px-2 py-0.5 rounded-full">PRIORITY #1</span>
               </div>
               <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed mb-4">
-                Instant emergency reporting in Hindi, Gujarati, English, or 20+ other regional dialects. Hold SOS button or speak your emergency — Gemini extracts severity, victims, and coordinates.
+                Emergency reporting interface for text, voice and image evidence. Gemini analyzes the submitted evidence and returns structured incident data.
               </p>
             </div>
             <div class="pl-2 pt-3 border-t border-slate-100 dark:border-gray-800 flex items-center justify-between">
@@ -465,7 +465,7 @@
                 <span class="bg-emerald-500/10 text-brand-teal text-xs font-bold px-2 py-0.5 rounded-full">CASUALTY PREP</span>
               </div>
               <p class="text-xs text-slate-600 dark:text-gray-400 leading-relaxed mb-4">
-                Advance telemetry of incoming ambulance patients with countdown ETAs, ICU bed inventory, blood unit reserves, and Gemini AI mass casualty surge projections.
+                Prototype hospital coordination view. Real hospital telemetry is not connected; actions are recorded as workflow events.
               </p>
             </div>
             <div class="pl-2 pt-3 border-t border-slate-100 dark:border-gray-800 flex items-center justify-between">
@@ -585,6 +585,17 @@
             <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-2.5">
               2. Multimodal Incident Intake (Voice, Media, Text)
             </label>
+
+            <div class="mb-3">
+              <label for="incident-message" class="block text-[11px] font-bold text-slate-500 dark:text-gray-400 mb-1">Emergency description</label>
+              <textarea id="incident-message" rows="3" maxlength="8000"
+                class="w-full rounded-xl border border-lightBorder dark:border-gray-700 bg-slate-50 dark:bg-gray-800/70 p-3 text-sm text-slate-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-brand-red/40"
+                placeholder="Describe what happened, what you can see, and whether anyone is at risk...">
+              </textarea>
+              <div class="mt-1 text-[10px] text-slate-400">Use the citizen's own language. Do not enter unnecessary personal or medical details.</div>
+            </div>
+
+            <input id="scene-file-input" type="file" accept="image/*" class="hidden" onchange="handleSceneFile(event)">
             
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
               <!-- Voice SOS Button -->
@@ -599,7 +610,7 @@
               </button>
 
               <!-- Photo / Video Upload -->
-              <button onclick="simulatePhotoUpload()" class="p-3.5 rounded-xl border border-lightBorder dark:border-darkBorder bg-slate-50 dark:bg-gray-800/60 hover:border-brand-blue flex flex-col items-center justify-center gap-2 text-center transition">
+              <button type="button" onclick="document.getElementById('scene-file-input').click()" class="p-3.5 rounded-xl border border-lightBorder dark:border-darkBorder bg-slate-50 dark:bg-gray-800/60 hover:border-brand-blue flex flex-col items-center justify-center gap-2 text-center transition">
                 <div class="w-8 h-8 rounded-full bg-blue-500/10 text-brand-blue flex items-center justify-center">
                   <i data-lucide="camera" class="w-4 h-4"></i>
                 </div>
@@ -616,7 +627,7 @@
                 </div>
                 <div>
                   <div class="text-xs font-bold text-slate-800 dark:text-white">GPS Lock (Active)</div>
-                  <div class="text-[10px] text-emerald-600 dark:text-brand-teal font-mono">22.3039° N, 70.8022° E</div>
+                  <div id="gps-status" class="text-[10px] text-emerald-600 dark:text-brand-teal font-mono">Requesting location…</div>
                 </div>
               </div>
             </div>
@@ -625,10 +636,10 @@
             <div id="transcription-box" class="p-3 rounded-xl bg-slate-100 dark:bg-gray-800/80 border border-slate-200 dark:border-gray-700 text-xs space-y-1">
               <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-gray-400">
                 <span class="flex items-center gap-1"><i data-lucide="cpu" class="w-3.5 h-3.5 text-purple-500"></i> Gemini Audio Transcriber:</span>
-                <span class="text-emerald-500">Audio Captured</span>
+                <span id="voice-analysis-status" class="text-slate-400">Ready</span>
               </div>
               <p id="transcription-text" class="text-slate-700 dark:text-gray-200 italic font-medium">
-                "રિંગ રોડ ચોકડી પાસે કાર અને ટેમ્પો વચ્ચે અકસ્માત થયો છે. બે માણસો ઘાયલ છે, જલ્દી એમ્બ્યુલન્સ મોકલો!" (Gujarati audio detected & translated: "Accident between car & tempo near Ring Road. Two people injured, send ambulance fast!")
+                Record a voice SOS or enter a text report. Gemini will analyze the submitted evidence.
               </p>
             </div>
           </div>
@@ -664,9 +675,9 @@
             <!-- Gemini Structured Output Breakdown -->
             <div class="space-y-3 text-xs">
               <div class="bg-slate-50 dark:bg-gray-800/80 p-3 rounded-xl border border-slate-200 dark:border-gray-700">
-                <span class="text-slate-400 uppercase font-bold text-[10px] tracking-wider">Gemini 2.0 Incident Assessment</span>
-                <div class="text-sm font-bold text-slate-800 dark:text-white mt-1">High Severity Vehicle Collision</div>
-                <p class="text-[11px] text-slate-500 dark:text-gray-400 mt-0.5">Identified 2 victims with potential orthopedic & head trauma. Urgent extrication required.</p>
+                <span class="text-slate-400 uppercase font-bold text-[10px] tracking-wider">Gemini Incident Assessment</span>
+                <div id="triage-assessment" class="text-sm font-bold text-slate-800 dark:text-white mt-1">Awaiting incident</div>
+                <p id="triage-summary" class="text-[11px] text-slate-500 dark:text-gray-400 mt-0.5">Submit a text, voice, or image report to generate a structured assessment.</p>
               </div>
 
               <!-- Dispatch ETA & Unit -->
@@ -734,7 +745,7 @@
               <h2 class="font-extrabold text-base text-slate-900 dark:text-white">CAD Emergency Route Dispatch</h2>
               <span class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase animate-pulse">Live Incident</span>
             </div>
-            <p class="text-xs text-slate-500 dark:text-gray-400">Incident ID: <span class="font-mono font-bold text-slate-700 dark:text-gray-300">#inc-001</span> • Center: 22.3039, 70.8022</p>
+            <p class="text-xs text-slate-500 dark:text-gray-400">Incident ID: <span id="cad-incident-id" class="font-mono font-bold text-slate-700 dark:text-gray-300">No active incident</span> • <span id="cad-center">Awaiting coordinates</span></p>
           </div>
         </div>
 
@@ -811,22 +822,22 @@
             <div class="flex items-center gap-1.5 font-bold text-xs text-slate-800 dark:text-white uppercase">
               <i data-lucide="radar" class="w-4 h-4 text-brand-red"></i> Incident Intel & Summary
             </div>
-            <span class="text-[10px] font-mono text-slate-400">#INC-001</span>
+            <span id="cad-summary-id" class="text-[10px] font-mono text-slate-400">—</span>
           </div>
 
           <!-- Incident Details Card -->
           <div class="p-3 bg-red-500/5 dark:bg-red-950/20 border border-red-500/20 rounded-xl space-y-2">
             <div class="flex items-center justify-between text-xs">
-              <span class="font-bold text-brand-red">Incident #inc-001</span>
+              <span id="cad-card-id" class="font-bold text-brand-red">No incident</span>
               <span class="bg-red-500 text-white font-bold text-[10px] px-1.5 py-0.5 rounded">HIGH SEVERITY</span>
             </div>
             <div class="grid grid-cols-2 text-[11px] text-slate-600 dark:text-gray-300">
-              <div>Type: <span class="font-bold text-slate-900 dark:text-white">Road Crash</span></div>
-              <div>Danger Zone: <span class="font-bold text-slate-900 dark:text-white">500m Radius</span></div>
+              <div>Type: <span id="cad-type" class="font-bold text-slate-900 dark:text-white">—</span></div>
+              <div>People at risk: <span id="cad-people" class="font-bold text-slate-900 dark:text-white">—</span></div>
             </div>
             <div class="text-[10px] font-mono text-slate-500 dark:text-gray-400 flex items-center justify-between pt-1 border-t border-red-500/10">
-              <span>22.3039, 70.8022</span>
-              <button onclick="copyCoords('22.3039, 70.8022')" class="text-brand-blue hover:underline">Copy Coords</button>
+              <span id="cad-coords">—</span>
+              <button id="cad-copy-coords" onclick="copyCoords(document.getElementById('cad-coords').textContent)" class="text-brand-blue hover:underline">Copy Coords</button>
             </div>
           </div>
 
@@ -1209,13 +1220,13 @@
           </div>
           <div>
             <h2 class="font-black text-lg tracking-tight">AI Early Warning & Flood Forecasting Network</h2>
-            <p class="text-xs text-blue-100">Powered by Google Flood Forecasting API + IMD Doppler Radar + River Gauges</p>
+            <p class="text-xs text-blue-100">Powered by Prototype data view; live Google/IMD/radar feeds are not connected</p>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
           <button onclick="broadcastEarlyWarningAlert()" class="px-3.5 py-1.5 bg-brand-red text-white text-xs font-bold rounded-lg shadow hover:bg-red-600 transition flex items-center gap-1.5">
-            <i data-lucide="radio" class="w-3.5 h-3.5"></i> Broadcast Mass Warning (12,847 Citizens)
+            <i data-lucide="radio" class="w-3.5 h-3.5"></i> Broadcast Mass Warning (Prototype broadcast)
           </button>
         </div>
       </div>
@@ -1228,10 +1239,10 @@
           <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-gray-800">
             <div>
               <h3 class="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider">Aji River Hydrograph • Sensor Station 04</h3>
-              <p class="text-xs text-slate-500 dark:text-gray-400">Past 12h Telemetry vs. Google Flood API 6h Predictive Curve</p>
+              <p class="text-xs text-slate-500 dark:text-gray-400">Prototype chart; replace with authorised live/public data before claiming real telemetry</p>
             </div>
             <span class="bg-red-500/10 text-brand-red text-xs font-bold px-2 py-0.5 rounded border border-red-500/20">
-              Breach in ~3.5h
+              Demo forecast
             </span>
           </div>
 
@@ -1243,9 +1254,9 @@
           <div class="p-3 bg-red-500/5 border border-red-500/20 rounded-xl text-xs flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 rounded-full bg-brand-red animate-pulse"></span>
-              <span class="text-slate-700 dark:text-gray-300 font-medium">Critical Threshold (45.2m RL) expected to be crossed at <strong>14:30 IST</strong>.</span>
+              <span class="text-slate-700 dark:text-gray-300 font-medium">Demo threshold example — replace with verified public data before submission.</span>
             </div>
-            <span class="font-bold text-brand-red font-mono text-[11px]">Confidence: 87%</span>
+            <span class="font-bold text-brand-red font-mono text-[11px]">Prototype metric</span>
           </div>
         </div>
 
@@ -1270,7 +1281,7 @@
                   <span class="text-[10px] text-slate-400 block">Instant push to smartphones within 5km radius</span>
                 </div>
               </div>
-              <span class="text-emerald-500 font-bold text-[11px]">8,920 Devices</span>
+              <span class="text-emerald-500 font-bold text-[11px]">Demo configuration</span>
             </div>
 
             <div class="p-2.5 bg-slate-50 dark:bg-gray-800 rounded-xl flex items-center justify-between">
@@ -1281,7 +1292,7 @@
                   <span class="text-[10px] text-slate-400 block">Feature phone fallback (Gujarati & Hindi script)</span>
                 </div>
               </div>
-              <span class="text-emerald-500 font-bold text-[11px]">3,927 Numbers</span>
+              <span class="text-emerald-500 font-bold text-[11px]">Demo configuration</span>
             </div>
 
             <div class="p-2.5 bg-slate-50 dark:bg-gray-800 rounded-xl flex items-center justify-between">
@@ -1289,10 +1300,10 @@
                 <i data-lucide="phone-call" class="w-4 h-4 text-purple-500"></i>
                 <div>
                   <span class="font-bold text-slate-800 dark:text-white">IVR Automated Voice Calls</span>
-                  <span class="text-[10px] text-slate-400 block">Gemini Text-to-Speech audio calls to rural sarpanches</span>
+                  <span class="text-[10px] text-slate-400 block">Prototype channel; no automated calls are sent</span>
                 </div>
               </div>
-              <span class="text-emerald-500 font-bold text-[11px]">42 Panchayats</span>
+              <span class="text-emerald-500 font-bold text-[11px]">Demo configuration</span>
             </div>
           </div>
 
@@ -1369,7 +1380,7 @@
         <span>— Hack2Skill Google Build with AI: Code for Community 2nd Edition</span>
       </div>
       <div class="flex items-center gap-4 text-[11px]">
-        <span>Powered by Gemini 2.0 Flash • Vertex AI • Leaflet.js</span>
+        <span>Prototype powered by Google Gemini • Firebase • Leaflet.js • Simulated integrations are labelled</span>
         <button onclick="window.scrollTo({top:0, behavior:'smooth'})" class="hover:text-brand-red">Back to top &uarr;</button>
       </div>
     </div>
@@ -1462,71 +1473,253 @@
       menu.classList.toggle('hidden');
     }
 
-    // 3. CITIZEN SOS LOGIC
+    // 3. SAHARAAI BACKEND INTEGRATION
+    // Local development: http://localhost:8080
+    // Production: set window.SAHARAAI_API_BASE before this script runs.
+    const SAHARAAI_API_BASE = (window.SAHARAAI_API_BASE || 'http://localhost:8080').replace(/\/$/, '');
     let isRecording = false;
-    function toggleVoiceRecording() {
-      const micIcon = document.getElementById('voice-mic-icon');
-      const statusText = document.getElementById('voice-status-text');
-      const box = document.getElementById('transcription-box');
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let pendingVoice = null;
+    let pendingSceneImage = null;
+    let activeIncident = null;
+    let selectedEmergencyType = 'Road Accident';
+    let userLocation = null;
 
-      if (!isRecording) {
-        isRecording = true;
-        micIcon.classList.add('animate-ping', 'bg-red-600');
-        statusText.textContent = "Listening to audio...";
-        box.classList.remove('opacity-50');
-      } else {
-        isRecording = false;
-        micIcon.classList.remove('animate-ping', 'bg-red-600');
-        statusText.textContent = "Audio Captured ✅";
-        alert("Gemini Transcriber successfully converted voice note into high-priority triage JSON.");
+    function apiUrl(path) { return `${SAHARAAI_API_BASE}${path}`; }
+
+    async function apiFetch(path, options = {}) {
+      const response = await fetch(apiUrl(path), {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+      return payload;
+    }
+
+    async function checkBackend() {
+      const label = document.getElementById('backend-status-label');
+      try {
+        await apiFetch('/api/health');
+        if (label) { label.textContent = 'Backend: online'; label.className = 'text-[11px] font-mono text-emerald-200'; }
+      } catch (error) {
+        if (label) { label.textContent = 'Backend: offline'; label.className = 'text-[11px] font-mono text-yellow-200'; }
       }
     }
 
-    function simulatePhotoUpload() {
-      document.getElementById('photo-attached-status').innerHTML = "<span class='text-brand-teal font-bold'>Photo Analyzed: Ring Road Crash Scene</span>";
-      alert("Disaster Scene image uploaded. Gemini Vision AI extracted: 2 vehicles damaged, passenger entrapment detected, fuel leak risk zero.");
+    function requestUserLocation() {
+      const status = document.getElementById('gps-status');
+      if (!navigator.geolocation) {
+        userLocation = null;
+        if (status) status.textContent = 'Location unavailable';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          userLocation = {
+            latitude: Number(position.coords.latitude.toFixed(6)),
+            longitude: Number(position.coords.longitude.toFixed(6)),
+            accuracyMeters: Math.round(position.coords.accuracy || 0)
+          };
+          if (status) status.textContent = `${userLocation.latitude}° N, ${userLocation.longitude}° E`;
+        },
+        () => {
+          userLocation = null;
+          if (status) status.textContent = 'Location permission not granted';
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
     }
 
     function selectEmergencyType(btn, typeName) {
+      selectedEmergencyType = typeName;
       document.querySelectorAll('.em-type-btn').forEach(b => {
         b.className = 'em-type-btn p-2.5 rounded-xl border border-lightBorder dark:border-darkBorder bg-slate-50 dark:bg-gray-800 text-slate-700 dark:text-gray-300 text-center font-medium text-xs flex flex-col items-center gap-1 hover:border-brand-blue transition';
       });
       btn.className = 'em-type-btn p-2.5 rounded-xl border-2 border-brand-red bg-red-500/10 text-brand-red text-center font-bold text-xs flex flex-col items-center gap-1 transition';
     }
 
-    function executeSOSTrigger() {
+    async function toggleVoiceRecording() {
+      const micIcon = document.getElementById('voice-mic-icon');
+      const statusText = document.getElementById('voice-status-text');
+      const box = document.getElementById('transcription-box');
+      const status = document.getElementById('voice-analysis-status');
+
+      if (isRecording) {
+        if (mediaRecorder) mediaRecorder.stop();
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        alert('Voice recording is not supported by this browser. Use the text report instead.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = event => { if (event.data.size) recordedChunks.push(event.data); };
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(track => track.stop());
+          const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          pendingVoice = { dataBase64: await blobToBase64(blob), mimeType: blob.type || 'audio/webm' };
+          isRecording = false;
+          micIcon.classList.remove('animate-ping', 'bg-red-600');
+          statusText.textContent = 'Audio Captured ✓';
+          if (status) status.textContent = 'Ready to submit';
+          if (box) box.classList.remove('opacity-50');
+          document.getElementById('transcription-text').textContent = 'Voice evidence captured. Press Trigger Emergency SOS to send it to Gemini for analysis.';
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        micIcon.classList.add('animate-ping', 'bg-red-600');
+        statusText.textContent = 'Listening… click to stop';
+        if (status) status.textContent = 'Recording';
+        if (box) box.classList.remove('opacity-50');
+      } catch (error) {
+        alert(`Microphone access failed: ${error.message}`);
+      }
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function handleSceneFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file.');
+        return;
+      }
+      if (file.size > 6 * 1024 * 1024) {
+        alert('Please keep the image under 6 MB for the prototype.');
+        return;
+      }
+      const status = document.getElementById('photo-attached-status');
+      pendingSceneImage = { dataBase64: await blobToBase64(file), mimeType: file.type };
+      if (status) status.innerHTML = `<span class='text-brand-blue font-bold'>Photo attached: ${escapeHtml(file.name)}</span>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[ch]));
+    }
+
+    function buildIncidentMessage() {
+      const typed = document.getElementById('incident-message')?.value.trim() || '';
+      if (typed) return typed;
+      return `Emergency type selected by citizen: ${selectedEmergencyType}. Analyze the attached evidence and determine the actual incident from the supplied evidence.`;
+    }
+
+    async function executeSOSTrigger() {
       const btn = document.getElementById('trigger-sos-btn');
-      btn.innerHTML = `<i data-lucide="check" class="w-5 h-5 text-emerald-300"></i> DISPATCHED TO NDRF & 108 (ETA 03:48)`;
-      btn.classList.remove('from-red-600', 'via-brand-red', 'to-rose-600');
-      btn.classList.add('bg-emerald-600');
+      const statusBadge = document.getElementById('triage-status-badge');
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-pulse">ANALYZING WITH GEMINI…</span>';
+      if (statusBadge) statusBadge.textContent = 'ANALYZING';
 
-      document.getElementById('triage-status-badge').textContent = 'NEW SOS BROADCASTED';
-      document.getElementById('triage-status-badge').className = 'bg-emerald-600 text-white font-bold text-xs px-2 py-0.5 rounded';
+      try {
+        if (!userLocation) requestUserLocation();
+        const media = [];
+        if (pendingVoice) media.push({ type: 'audio', ...pendingVoice });
+        if (pendingSceneImage) media.push({ type: 'image', ...pendingSceneImage });
 
-      startCountdown();
-      lucide.createIcons();
-      alert("🚨 EMERGENCY SOS BROADCASTED! \n\n1. NDRF Sector 6 unit assigned.\n2. Ambulance #AMB-7 dispatched via clear bypass route.\n3. Gokul Hospital Trauma Bay 1 assigned.\n4. Offline SMS queue transmitted to Rajkot Collectorate.");
-    }
+        const result = await apiFetch('/api/incidents', {
+          method: 'POST',
+          body: JSON.stringify({
+            channel: media.length > 1 ? 'multimodal' : media.length === 1 ? media[0].type : 'text',
+            source: 'citizen',
+            message: buildIncidentMessage(),
+            languageHint: document.getElementById('sos-lang-select')?.value || 'en',
+            location: userLocation || undefined,
+            media
+          })
+        });
 
-    // Countdown Timer Simulator
-    let timerSeconds = 228; // 3m 48s
-    function startCountdown() {
-      const el = document.getElementById('countdown-timer');
-      if (!el) return;
-      const interval = setInterval(() => {
-        if (timerSeconds <= 0) {
-          clearInterval(interval);
-          el.textContent = "ARRIVED ON SCENE";
-          return;
+        activeIncident = result.incident;
+        pendingVoice = null;
+        pendingSceneImage = null;
+        renderIncident(result.incident);
+        btn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i> INCIDENT RECEIVED & ANALYZED';
+        btn.classList.remove('from-red-600', 'via-brand-red', 'to-rose-600');
+        btn.classList.add('bg-emerald-600');
+        if (statusBadge) {
+          statusBadge.textContent = `AI PROCESSED • ${result.incident.id}`;
+          statusBadge.className = 'bg-emerald-600 text-white font-bold text-xs px-2 py-0.5 rounded';
         }
-        timerSeconds--;
-        const mins = Math.floor(timerSeconds / 60);
-        const secs = timerSeconds % 60;
-        el.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      }, 1000);
+        lucide.createIcons();
+        await refreshIncidents();
+      } catch (error) {
+        btn.disabled = false;
+        btn.innerHTML = original;
+        if (statusBadge) statusBadge.textContent = 'BACKEND / AI ERROR';
+        lucide.createIcons();
+        alert(`SaharaAI could not process this SOS.\n\n${error.message}\n\nCheck that the backend is running and Gemini/Firebase credentials are configured.`);
+      }
     }
 
-    // 4. LEAFLET TACTICAL MAP INITIALIZATION (RAJKOT, GUJARAT)
+    function renderIncident(incident) {
+      const ai = incident.ai || {};
+      const assessment = document.getElementById('triage-assessment');
+      const summary = document.getElementById('triage-summary');
+      if (assessment) assessment.textContent = `${ai.severity || 'UNKNOWN'} • ${ai.incidentType || 'INCIDENT'}`;
+      if (summary) summary.textContent = ai.summary || 'No AI summary returned.';
+
+      const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+      set('cad-incident-id', incident.id);
+      set('cad-summary-id', incident.id);
+      set('cad-card-id', `Incident ${incident.id}`);
+      set('cad-severity', ai.severity || 'UNKNOWN');
+      set('cad-type', ai.secondaryType ? `${ai.incidentType} + ${ai.secondaryType}` : (ai.incidentType || '—'));
+      set('cad-people', String(ai.peopleAtRisk ?? '—'));
+      if (incident.location) {
+        const coords = `${incident.location.latitude}, ${incident.location.longitude}`;
+        set('cad-center', coords);
+        set('cad-coords', coords);
+      }
+      const status = document.getElementById('triage-status-badge');
+      if (status) status.textContent = `${incident.status} • ${incident.id}`;
+      updateMapFromIncident(incident);
+    }
+
+    async function refreshIncidents() {
+      try {
+        const result = await apiFetch('/api/incidents?limit=1');
+        if (result.incidents?.[0]) {
+          activeIncident = result.incidents[0];
+          renderIncident(activeIncident);
+        }
+      } catch (_) {}
+    }
+
+    async function recordOperationAction(action, metadata = {}) {
+      try {
+        const result = await apiFetch('/api/operations/actions', {
+          method: 'POST',
+          body: JSON.stringify({
+            action,
+            incidentId: activeIncident?.id || null,
+            actorType: 'operator-demo',
+            metadata
+          })
+        });
+        return result;
+      } catch (error) {
+        alert(`Operation could not be recorded: ${error.message}`);
+        throw error;
+      }
+    }
+
+    // 4. LEAFLET TACTICAL MAP INITIALIZATION
+ (RAJKOT, GUJARAT)
     let map = null;
     let responderMarker = null;
     let incidentMarker = null;
@@ -1552,8 +1745,10 @@
         maxZoom: 19
       }).addTo(map);
 
-      // Incident Coordinate (Ring Road)
-      const incidentCoord = [22.3039, 70.8022];
+      // Use the latest backend incident when available; fallback is clearly a demo coordinate.
+      const incidentCoord = activeIncident?.location
+        ? [activeIncident.location.latitude, activeIncident.location.longitude]
+        : [22.3039, 70.8022];
       // Blocked endpoint
       const blockedEnd = [22.3080, 70.8150];
       // Gokul Hospital simulated destination
@@ -1623,6 +1818,18 @@
       map.fitBounds(bypassPolyline.getBounds(), { padding: [40, 40] });
     }
 
+    function updateMapFromIncident(incident) {
+      if (!incident?.location) return;
+      const coord = [incident.location.latitude, incident.location.longitude];
+      if (!map) return;
+      if (incidentMarker) {
+        incidentMarker.setLatLng(coord);
+        incidentMarker.bindPopup(`<b>Incident ${escapeHtml(incident.id)}</b><br>${escapeHtml(incident.ai?.summary || 'AI-processed incident')}`);
+      }
+      if (hazardCircle) hazardCircle.setLatLng(coord);
+      map.setView(coord, 15);
+    }
+
     function fitMapBounds() {
       if (!map || !bypassPolyline) return;
       map.fitBounds(bypassPolyline.getBounds(), { padding: [50, 50] });
@@ -1630,7 +1837,8 @@
 
     function focusIncident() {
       if (!map) return;
-      map.setView([22.3039, 70.8022], 16);
+      const coord = activeIncident?.location ? [activeIncident.location.latitude, activeIncident.location.longitude] : [22.3039, 70.8022];
+      map.setView(coord, 16);
     }
 
     let isSat = false;
@@ -1673,7 +1881,8 @@
       navInterval = setInterval(() => {
         if (step >= waypoints.length) {
           clearInterval(navInterval);
-          alert("Ambulance #AMB-7 has arrived at Gokul Superspeciality Hospital trauma bay!");
+          recordOperationAction('ROUTE_SIMULATION_COMPLETED', { simulation: true }).catch(() => {});
+          alert("Prototype route simulation completed. No real ambulance movement is being claimed.");
           return;
         }
         responderMarker.setLatLng(waypoints[step]);
@@ -1776,22 +1985,25 @@
     }
 
     // 6. HOSPITAL & VOLUNTEER ACTIONS
-    function triggerHospitalProtocol() {
-      alert("🚨 CODE YELLOW INITIATED: \n- 4 on-call surgeons notified via automated IVR call.\n- Trauma bays 1 & 2 pre-oxygenated.\n- 4 units O-negative blood reserved.");
+    async function triggerHospitalProtocol() {
+      await recordOperationAction('HOSPITAL_PROTOCOL_REQUESTED', { protocol: 'CODE_YELLOW' });
+      alert('Hospital protocol request recorded in SaharaAI. No real hospital notification is claimed by this prototype.');
     }
 
-    function assignBay(num) {
-      alert(`Trauma Bay #${num} assigned and locked for incoming patient. Pre-arrival team standing by.`);
+    async function assignBay(num) {
+      await recordOperationAction('HOSPITAL_BAY_ASSIGNED', { bay: Number(num) });
+      alert(`Trauma Bay #${num} assignment recorded in the prototype workflow.`);
     }
 
-    function claimTask(btn) {
-      btn.textContent = "Assigned to You ✅";
-      btn.className = "px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-lg text-xs cursor-default";
-      alert("Task claimed! Mission rendezvous coordinates and tactical chat channel unlocked.");
+    async function claimTask(btn) {
+      await recordOperationAction('VOLUNTEER_TASK_CLAIMED', { task: btn.closest('.space-y-3')?.querySelector('h4')?.textContent || 'Volunteer task' });
+      btn.textContent = 'Recorded ✓';
+      btn.className = 'px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-lg text-xs cursor-default';
     }
 
-    function broadcastEarlyWarningAlert() {
-      alert("📢 MASS EARLY WARNING DISPATCHED:\n- 8,920 FCM mobile notifications pushed\n- 3,927 SMS broadcast via BSNL/Jio cellular towers\n- 42 Gram Panchayat voice calls initiated\n\nCitizens in Kothariya instructed to relocate to safe evacuation shelters.");
+    async function broadcastEarlyWarningAlert() {
+      await recordOperationAction('EARLY_WARNING_REQUESTED', { channels: ['FCM', 'SMS', 'IVR'] });
+      alert('Early-warning operation recorded in SaharaAI. No real mass notification was sent by this prototype.');
     }
 
     // 7. OFFLINE MODAL CONTROLS
@@ -1804,6 +2016,13 @@
       document.getElementById('offline-modal').classList.remove('flex');
       document.getElementById('offline-modal').classList.add('hidden');
     }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      checkBackend();
+      requestUserLocation();
+      refreshIncidents();
+      if (window.lucide) lucide.createIcons();
+    });
   </script>
 
 </body>
